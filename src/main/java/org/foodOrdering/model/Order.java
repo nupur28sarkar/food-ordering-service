@@ -3,12 +3,13 @@ package org.foodOrdering.model;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "order")
+@Table(name = "food-order")
 @Data
 @Builder
 public class Order {

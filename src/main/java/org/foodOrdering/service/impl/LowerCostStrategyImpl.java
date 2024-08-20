@@ -10,16 +10,16 @@ import org.foodOrdering.model.RestaurantMenuItem;
 import org.foodOrdering.service.RedisService;
 import org.foodOrdering.service.RestaurantSelectionStrategy;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
-
+@Service
 @RequiredArgsConstructor
 public class LowerCostStrategyImpl implements RestaurantSelectionStrategy {
 
-    @Autowired
     private final RedisService redisService;
     @Override
     public List<RestaurantOrderItem> selectRestaurant(List<RestaurantMenuItem> restaurants, Double quantity) {

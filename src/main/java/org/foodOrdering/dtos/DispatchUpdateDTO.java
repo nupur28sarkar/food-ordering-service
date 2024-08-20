@@ -5,14 +5,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
-public class RestaurantMenuItemDTO {
-
-    private Long id;
-
-    private Long menuItemId;
-
-    private double price;
-
+@AllArgsConstructor
+public class DispatchUpdateDTO {
+    private String orderId;
+    private String item;
+    private Double quantity;
 }

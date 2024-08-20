@@ -10,10 +10,11 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 @Mapper(componentModel = "spring")
 public interface RestaurantMenuItemMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(target = "itemId", source = "restaurantMenuItem.menuItem.id")
-    RestaurantMenuItemDTO toDTO(RestaurantMenuItem restaurantMenuItem);
+    @Mapping(target = "menuItemId", source = "menuItemId")
+    RestaurantMenuItemDTO toDTO(RestaurantMenuItem restaurantMenuItem, Long menuItemId);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(source = "itemId", target = "menuItem.id")
-    RestaurantMenuItem toEntity(RestaurantMenuItemDTO restaurantMenuItemDTO);
+    @Mapping(source = "restaurantMenuItemDTO.menuItemId", target = "menuItem.id")
+    @Mapping(source = "restaurantId", target = "restaurant.id")
+    RestaurantMenuItem toEntity(RestaurantMenuItemDTO restaurantMenuItemDTO, Long restaurantId);
 }

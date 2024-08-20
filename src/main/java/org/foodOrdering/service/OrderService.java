@@ -1,9 +1,10 @@
 package org.foodOrdering.service;
 
 import org.foodOrdering.dtos.OrderRequestDTO;
+import org.foodOrdering.dtos.OrderResponseDTO;
 
 import java.util.List;
 
 public interface OrderService {
-    void placeOrder(Long userId, List<OrderRequestDTO> itemQuantities);
+    OrderResponseDTO placeOrder(Long userId, List<OrderRequestDTO> itemQuantities);
 }

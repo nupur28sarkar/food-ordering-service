@@ -9,7 +9,6 @@ import org.foodOrdering.model.RestaurantMenuItem;
 import org.foodOrdering.repositories.RestaurantMenuItemRepository;
 import org.foodOrdering.repositories.RestaurantRepository;
 import org.foodOrdering.service.RestaurantMenuItemService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,16 +20,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RestaurantMenuServiceImpl implements RestaurantMenuItemService {
 
-    @Autowired
     private final RestaurantMenuItemRepository restaurantMenuItemRepository;
 
-    @Autowired
     private final RestaurantRepository restaurantRepository;
 
-    @Autowired
     private final RestaurantMenuItemMapper restaurantMenuItemMapper;
     @Override
-    public List<RestaurantMenuItemDTO> addMenuItem(Long restaurantId, List<RestaurantMenuItemDTO> restaurantMenuDTOs) {
+    public List<RestaurantMenuItem> addMenuItem(Long restaurantId, List<RestaurantMenuItemDTO> restaurantMenu) {
         Optional<Restaurant> restaurantOptional = restaurantRepository.findById(restaurantId);
         if (restaurantOptional.isEmpty()) {
             throw new EntityNotFoundException("Restaurant with id " + restaurantId + " not found");
@@ -39,19 +35,12 @@ public class RestaurantMenuServiceImpl implements RestaurantMenuItemService {
         Set<Long> existingItemIds = restaurantMenuItemList.stream()
                 .map(item -> item.getMenuItem().getId())
                 .collect(Collectors.toSet());
-        List<RestaurantMenuItemDTO> filteredDTOs = restaurantMenuDTOs.stream()
-                .filter(dto -> !existingItemIds.contains(dto.getItemId()))
+        List<RestaurantMenuItem> restaurantMenuItemsToSave = restaurantMenu.stream()
+                .filter(dto -> !existingItemIds.contains(dto.getMenuItemId()))
+                .map((RestaurantMenuItemDTO restaurantMenuItemDTO) -> restaurantMenuItemMapper.toEntity(restaurantMenuItemDTO, restaurantId)) // Convert DTOs to entities with additional parameter
                 .toList();
-        List<RestaurantMenuItem> newRestaurantMenuItems = filteredDTOs.stream()
-                .map(dto -> {
-                    RestaurantMenuItem entity = restaurantMenuItemMapper.toEntity(dto);
-                    entity.setRestaurant(restaurantOptional.get());
-                    return entity;
-                })
-                .toList();
-        return restaurantMenuItemRepository.saveAll(newRestaurantMenuItems).stream()
-                .map(restaurantMenuItemMapper::toDTO)
-                .collect(Collectors.toList());
+
+        return restaurantMenuItemRepository.saveAll(restaurantMenuItemsToSave);
     }
 
     @Override

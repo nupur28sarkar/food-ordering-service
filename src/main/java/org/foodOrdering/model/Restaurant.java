@@ -30,7 +30,7 @@ public class Restaurant {
     private String phone;
 
     @Column(name = "processing_capacity")
-    private int processingCapacity;
+    private double processingCapacity;
 
     @Column(name = "rating")
     private double rating;

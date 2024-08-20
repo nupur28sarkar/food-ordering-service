@@ -1,6 +1,8 @@
 package org.foodOrdering.dtos;
 
-import jakarta.annotation.Nonnull;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,14 +13,20 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class RestaurantDTO {
     private Long id;
-    @Nonnull
+
+    @NotBlank(message = "Name cannot be null or empty")
     private String name;
-    @Nonnull
+
+    @NotBlank(message = "Address cannot be null or empty")
     private String address;
-    @Nonnull
+
+    @NotBlank(message = "Email cannot be null or empty")
+    @Email(message = "Email should be valid")
     private String email;
-    @Nonnull
+
+    @NotBlank(message = "Phone cannot be null or empty")
     private String phone;
-    @Nonnull
-    private int processingCapacity;
+
+    @Positive(message = "Processing capacity must be positive")
+    private double processingCapacity;
 }
