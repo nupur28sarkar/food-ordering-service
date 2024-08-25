@@ -1,13 +1,21 @@
 package org.foodOrdering.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.foodOrdering.dtos.MenuItemDTO;
 import org.foodOrdering.exception.EntityNotFoundException;
+import org.foodOrdering.model.MenuItem;
 import org.foodOrdering.model.Restaurant;
 import org.foodOrdering.repositories.RestaurantRepository;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -15,10 +23,14 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class RedisService {
 
-    private final StringRedisTemplate redisTemplate;
+    private final RedisTemplate<String, String> redisTemplate;
 
     private final RestaurantRepository restaurantRepository;
+
+    private final ObjectMapper objectMapper;
     private static final String CAPACITY_KEY_PREFIX = "restaurant_capacity_";
+
+    private static final String MENU_ITEMS_CACHE_KEY = "menu_items_cache";
 
     public boolean reserveCapacity(Long restaurantId, Double quantity) {
         String key = CAPACITY_KEY_PREFIX + restaurantId;
@@ -27,49 +39,59 @@ public class RedisService {
 
         while (retryCount < maxRetries) {
             try {
-                // Watch the key
-                redisTemplate.watch(key);
-                ValueOperations<String, String> ops = redisTemplate.opsForValue();
-                String currentValue = ops.get(key);
+                // Use SessionCallback to handle transactions
+                Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+                    @Override
+                    @SuppressWarnings("unchecked")
+                    public Boolean execute(RedisOperations operations) {
+                        operations.watch(key); // Watch the key
 
-                if (currentValue == null) {
-                    return false; // No capacity set for the restaurant
-                }
+                        ValueOperations<String, String> ops = operations.opsForValue();
+                        String currentValue = ops.get(key);
 
-                double currentCapacity = Double.parseDouble(currentValue);
+                        if (currentValue == null) {
+                            operations.unwatch();
+                            return false; // No capacity set for the restaurant
+                        }
 
-                if (currentCapacity >= quantity) {
-                    // Start transaction
-                    redisTemplate.multi();
-                    // Calculate the new capacity
-                    double newCapacity = currentCapacity - quantity;
-                    // Set the new capacity
-                    ops.set(key, String.valueOf(newCapacity));
-                    // Execute transaction
-                    if (redisTemplate.exec() != null) {
-                        String lockKey = "lock:restaurant_capacity_" + restaurantId;
-                        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", 10, TimeUnit.SECONDS);
-                        if (Boolean.TRUE.equals(acquired)) {
-                            try {
-                                updateDatabaseCapacityAsync(restaurantId, newCapacity);
-                            } finally {
-                                redisTemplate.delete(lockKey);
+                        double currentCapacity = Double.parseDouble(currentValue);
+
+                        if (currentCapacity >= quantity) {
+                            operations.multi(); // Start transaction
+                            double newCapacity = currentCapacity - quantity;
+                            ops.set(key, String.valueOf(newCapacity)); // Queue the update command
+
+                            // Execute the transaction
+                            List<Object> execResult = operations.exec();
+                            if (execResult != null && !execResult.isEmpty()) {
+                                // Transaction was successful
+                                String lockKey = "lock:restaurant_capacity_" + restaurantId;
+                                Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", 10, TimeUnit.SECONDS);
+                                if (Boolean.TRUE.equals(acquired)) {
+                                    try {
+                                        updateDatabaseCapacityAsync(restaurantId, newCapacity);
+                                    } finally {
+                                        redisTemplate.delete(lockKey);
+                                    }
+                                }
+                                return true; // Reservation successful
                             }
                         }
-                        return true; // Reservation successful
+                        return false; // Transaction failed or not enough capacity
                     }
+                });
+
+                if (result != null && result) {
+                    return true; // Reservation successful
                 }
             } catch (Exception e) {
                 // Handle exceptions as needed
                 e.printStackTrace();
-            } finally {
-                // Unwatch the key
-                redisTemplate.unwatch();
             }
             retryCount++;
         }
 
-        return false; // Failed to reserve capacity after retries
+        return false;
     }
 
     public void releaseCapacity(Long restaurantId, Double quantity) {
@@ -81,6 +103,7 @@ public class RedisService {
         double currentCapacity = currentValue != null ? Double.parseDouble(currentValue) : 0.0;
         double newCapacity = currentCapacity + quantity;
         ops.set(key, String.valueOf(newCapacity));
+        updateDatabaseCapacityAsync(restaurantId, newCapacity);
     }
 
     public Double getCapacity(Long restaurantId) {
@@ -106,6 +129,39 @@ public class RedisService {
                 e.printStackTrace();
             }
         });
+    }
+
+    public void updateMenuCache(List<MenuItemDTO> menuItemList) {
+        List<MenuItemDTO> currentCache = getMenuItemsFromCache();
+
+        if (currentCache == null) {
+            // If no cache, simply add all items
+            currentCache = new ArrayList<>();
+        }
+
+        // Add new items to the cache, avoiding duplicates
+        Set<MenuItemDTO> updatedCache = new HashSet<>(currentCache);
+        updatedCache.addAll(menuItemList);
+
+        // Serialize the updated list and store it in Redis
+        try {
+            String json = objectMapper.writeValueAsString(new ArrayList<>(updatedCache));
+            redisTemplate.opsForValue().set(MENU_ITEMS_CACHE_KEY, json);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public List<MenuItemDTO> getMenuItemsFromCache() {
+        String json = redisTemplate.opsForValue().get(MENU_ITEMS_CACHE_KEY);
+        if (json != null) {
+            try {
+                return objectMapper.readValue(json, new TypeReference<List<MenuItemDTO>>() {});
+            } catch (JsonProcessingException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
     }
 }
 

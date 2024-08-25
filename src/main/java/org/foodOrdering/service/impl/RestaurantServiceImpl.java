@@ -42,7 +42,8 @@ public class RestaurantServiceImpl implements RestaurantService {
         if(restaurantOptional.isEmpty()) {
             throw new EntityNotFoundException("Restaurant with given id does not exist");
         }
-        Restaurant restaurant = restaurantMapper.toEntity(updatedRestaurant);
+        Restaurant restaurant = restaurantMapper.updateFromDTO(restaurantOptional.get(), updatedRestaurant);
+        restaurantRepository.save(restaurant);
         return restaurantMapper.toDTO(restaurant);
     }
 

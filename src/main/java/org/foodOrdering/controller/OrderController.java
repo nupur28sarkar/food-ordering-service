@@ -22,7 +22,6 @@ public class OrderController {
 
     @PostMapping()
     public ResponseEntity<?> placeOrder(@RequestHeader Long userId, @RequestBody List<OrderRequestDTO> orderRequestDTOList) {
-        orderService.placeOrder(userId, orderRequestDTOList);
         return new ResponseEntity<>(orderService.placeOrder(userId, orderRequestDTOList), HttpStatus.OK);
     }
 }

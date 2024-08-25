@@ -12,21 +12,16 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RestaurantDTO {
+
     private Long id;
 
-    @NotBlank(message = "Name cannot be null or empty")
     private String name;
 
-    @NotBlank(message = "Address cannot be null or empty")
     private String address;
 
-    @NotBlank(message = "Email cannot be null or empty")
-    @Email(message = "Email should be valid")
     private String email;
 
-    @NotBlank(message = "Phone cannot be null or empty")
     private String phone;
 
-    @Positive(message = "Processing capacity must be positive")
     private double processingCapacity;
 }

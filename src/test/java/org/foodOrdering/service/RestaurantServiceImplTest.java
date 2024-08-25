@@ -1,26 +1,31 @@
 package org.foodOrdering.service;
 
+import org.foodOrdering.dtos.DispatchUpdateDTO;
 import org.foodOrdering.dtos.RestaurantDTO;
+import org.foodOrdering.exception.EntityAlreadyExistsException;
 import org.foodOrdering.exception.EntityNotFoundException;
 import org.foodOrdering.mapper.RestaurantMapper;
 import org.foodOrdering.model.Restaurant;
 import org.foodOrdering.repositories.RestaurantRepository;
 import org.foodOrdering.service.impl.RestaurantServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-import org.foodOrdering.exception.EntityAlreadyExistsException;
-
+import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
 public class RestaurantServiceImplTest {
+
     @Mock
     private RestaurantRepository restaurantRepository;
 
@@ -33,57 +38,82 @@ public class RestaurantServiceImplTest {
     @InjectMocks
     private RestaurantServiceImpl restaurantService;
 
-    public RestaurantServiceImplTest() {
-        MockitoAnnotations.openMocks(this);
+    private RestaurantDTO restaurantDTO;
+    private Restaurant restaurant;
+
+    @BeforeEach
+    void setUp() {
+        restaurantDTO = new RestaurantDTO(1L, "Test Restaurant", "123 Test Address", "test@example.com", "1234567890", 100.0);
+        restaurant = Restaurant.builder()
+                .id(1L)
+                .name("Test Restaurant")
+                .address("123 Test Address")
+                .email("test@example.com")
+                .phone("1234567890")
+                .processingCapacity(100.0)
+                .build();
     }
 
     @Test
-    void registerRestaurant_Success() {
-        RestaurantDTO restaurantDTO = new RestaurantDTO();
-        Restaurant restaurant = new Restaurant();
-
-        when(restaurantRepository.existsByNameOrEmail(anyString(), anyString())).thenReturn(false);
-        when(restaurantMapper.toEntity(any(RestaurantDTO.class))).thenReturn(restaurant);
+    void testRegisterRestaurant_Success() {
+        when(restaurantRepository.existsByNameOrEmail(restaurantDTO.getName(), restaurantDTO.getEmail())).thenReturn(false);
+        when(restaurantMapper.toEntity(restaurantDTO)).thenReturn(restaurant);
         when(restaurantRepository.save(any(Restaurant.class))).thenReturn(restaurant);
-        when(restaurantMapper.toDTO(any(Restaurant.class))).thenReturn(restaurantDTO);
+        when(restaurantMapper.toDTO(restaurant)).thenReturn(restaurantDTO);
 
         RestaurantDTO result = restaurantService.registerRestaurant(restaurantDTO);
 
-        verify(redisService, times(1)).initializeCapacity(anyLong(), (int) anyDouble());
-        assertEquals(restaurantDTO, result);
+        assertNotNull(result);
+        assertEquals(restaurantDTO.getName(), result.getName());
+        verify(redisService, times(1)).initializeCapacity(eq(restaurant.getId()), eq(restaurant.getProcessingCapacity()));
     }
 
     @Test
-    void registerRestaurant_AlreadyExists() {
-        when(restaurantRepository.existsByNameOrEmail(anyString(), anyString())).thenReturn(true);
+    void testRegisterRestaurant_EntityAlreadyExistsException() {
+        when(restaurantRepository.existsByNameOrEmail(restaurantDTO.getName(), restaurantDTO.getEmail())).thenReturn(true);
 
-        assertThrows(EntityAlreadyExistsException.class, () -> {
-            restaurantService.registerRestaurant(new RestaurantDTO());
-        });
+        assertThrows(EntityAlreadyExistsException.class, () -> restaurantService.registerRestaurant(restaurantDTO));
 
-        verify(redisService, never()).initializeCapacity(anyLong(), (int) anyDouble());
+        verify(restaurantRepository, never()).save(any(Restaurant.class));
+        verify(redisService, never()).initializeCapacity(anyLong(), anyDouble());
     }
 
     @Test
-    void updateRestaurant_Success() {
-        RestaurantDTO restaurantDTO = new RestaurantDTO();
-        Restaurant restaurant = new Restaurant();
+    void testUpdateRestaurant_Success() {
+        Long restaurantId = 1L;
+        when(restaurantRepository.findById(restaurantId)).thenReturn(Optional.of(restaurant));
+        when(restaurantMapper.updateFromDTO(any(Restaurant.class), eq(restaurantDTO))).thenReturn(restaurant);
+        when(restaurantRepository.save(restaurant)).thenReturn(restaurant);
+        when(restaurantMapper.toDTO(restaurant)).thenReturn(restaurantDTO);
 
-        when(restaurantRepository.findById(anyLong())).thenReturn(Optional.of(restaurant));
-        when(restaurantMapper.toEntity(any(RestaurantDTO.class))).thenReturn(restaurant);
-        when(restaurantMapper.toDTO(any(Restaurant.class))).thenReturn(restaurantDTO);
+        RestaurantDTO result = restaurantService.updateRestaurant(restaurantId, restaurantDTO);
 
-        RestaurantDTO result = restaurantService.updateRestaurant(1L, restaurantDTO);
-
-        assertEquals(restaurantDTO, result);
+        assertNotNull(result);
+        assertEquals(restaurantDTO.getName(), result.getName());
     }
 
     @Test
-    void updateRestaurant_NotFound() {
-        when(restaurantRepository.findById(anyLong())).thenReturn(Optional.empty());
+    void testUpdateRestaurant_EntityNotFoundException() {
+        Long restaurantId = 1L;
+        when(restaurantRepository.findById(restaurantId)).thenReturn(Optional.empty());
 
-        assertThrows(EntityNotFoundException.class, () -> {
-            restaurantService.updateRestaurant(1L, new RestaurantDTO());
-        });
+        assertThrows(EntityNotFoundException.class, () -> restaurantService.updateRestaurant(restaurantId, restaurantDTO));
+
+        verify(restaurantRepository, never()).save(any(Restaurant.class));
+    }
+
+    @Test
+    void testDispatchItems_Success() {
+        Long restaurantId = 1L;
+        List<DispatchUpdateDTO> dispatchUpdates = List.of(
+                new DispatchUpdateDTO("orderId1", "item1", 10.0),
+                new DispatchUpdateDTO("orderId2", "item2", 15.0)
+        );
+
+        restaurantService.dispatchItems(restaurantId, dispatchUpdates);
+
+        verify(redisService, times(2)).releaseCapacity(eq(restaurantId), anyDouble());
+        verify(redisService).releaseCapacity(eq(restaurantId), eq(10.0));
+        verify(redisService).releaseCapacity(eq(restaurantId), eq(15.0));
     }
 }

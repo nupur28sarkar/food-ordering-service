@@ -1,5 +1,6 @@
 package org.foodOrdering.dtos;
 
+import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -7,14 +8,12 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class RestaurantMenuItemDTO {
+public class MenuItemDTO {
 
     private Long id;
 
-    private Long menuItemId;
+    private String itemName;
 
-    private double price;
-
-    private Long restaurantId;
+    private String description;
 
 }

@@ -1,66 +1,108 @@
 package org.foodOrdering.service;
 
-import org.foodOrdering.dtos.RestaurantMenuItemDTO;
-import org.foodOrdering.exception.EntityNotFoundException;
-import org.foodOrdering.mapper.RestaurantMenuItemMapper;
-import org.foodOrdering.model.Restaurant;
-import org.foodOrdering.model.RestaurantMenuItem;
-import org.foodOrdering.repositories.RestaurantMenuItemRepository;
-import org.foodOrdering.repositories.RestaurantRepository;
-import org.foodOrdering.service.impl.RestaurantMenuServiceImpl;
+import org.foodOrdering.dtos.MenuItemDTO;
+import org.foodOrdering.mapper.MenuItemMapper;
+import org.foodOrdering.model.MenuItem;
+import org.foodOrdering.repositories.MenuItemRepository;
+import org.foodOrdering.service.impl.MenuItemServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
-class RestaurantMenuServiceImplTest {
+@ExtendWith(MockitoExtension.class)
+public class RestaurantMenuItemServiceImplTest {
 
     @Mock
-    private RestaurantMenuItemRepository restaurantMenuItemRepository;
+    private MenuItemRepository menuItemRepository;
 
     @Mock
-    private RestaurantRepository restaurantRepository;
-
-    @Mock
-    private RestaurantMenuItemMapper restaurantMenuItemMapper;
+    private MenuItemMapper menuItemMapper;
 
     @InjectMocks
-    private RestaurantMenuServiceImpl restaurantMenuService;
+    private MenuItemServiceImpl menuItemService;
 
-    public RestaurantMenuServiceImplTest() {
-        MockitoAnnotations.openMocks(this);
+    private MenuItem menuItem1;
+    private MenuItem menuItem2;
+    private MenuItemDTO menuItemDTO1;
+    private MenuItemDTO menuItemDTO2;
+
+    @BeforeEach
+    void setUp() {
+        menuItem1 = MenuItem.builder()
+                .id(1L)
+                .itemName("Burger")
+                .description("Delicious burger")
+                .build();
+
+        menuItem2 = MenuItem.builder()
+                .id(2L)
+                .itemName("Pizza")
+                .description("Cheesy pizza")
+                .build();
+
+        menuItemDTO1 = new MenuItemDTO(1L, "Burger", "Delicious burger");
+        menuItemDTO2 = new MenuItemDTO(2L, "Pizza", "Cheesy pizza");
     }
 
     @Test
-    void addMenuItem_Success() {
-        Long restaurantId = 1L;
-        RestaurantMenuItemDTO dto = new RestaurantMenuItemDTO();
-        Restaurant restaurant = new Restaurant();
+    void testAddMenuItems_Success() {
+        List<MenuItem> inputItems = List.of(menuItem1, menuItem2);
+        List<MenuItem> existingItems = List.of(menuItem1);
+        List<MenuItem> newItems = List.of(menuItem2);
 
-        when(restaurantRepository.findById(anyLong())).thenReturn(Optional.of(restaurant));
-        when(restaurantMenuItemMapper.toEntity(any(RestaurantMenuItemDTO.class), anyLong())).thenReturn(new RestaurantMenuItem());
-        when(restaurantMenuItemRepository.saveAll(anyList())).thenReturn(List.of(new RestaurantMenuItem()));
+        when(menuItemRepository.findByItemNameIn(anyList())).thenReturn(existingItems);
+        when(menuItemRepository.saveAll(newItems)).thenReturn(newItems);
+        when(menuItemMapper.toDTO(anyList())).thenReturn(List.of(menuItemDTO1, menuItemDTO2));
 
-        List<RestaurantMenuItem> result = restaurantMenuService.addMenuItem(restaurantId, List.of(dto));
+        List<MenuItemDTO> result = menuItemService.addMenuItems(inputItems);
 
         assertNotNull(result);
-        assertEquals(1, result.size());
+        assertEquals(2, result.size());
+        verify(menuItemRepository, times(1)).findByItemNameIn(anyList());
+        verify(menuItemRepository, times(1)).saveAll(newItems);
+        verify(menuItemMapper, times(1)).toDTO(anyList());
     }
 
     @Test
-    void addMenuItem_RestaurantNotFound() {
-        when(restaurantRepository.findById(anyLong())).thenReturn(Optional.empty());
+    void testAddMenuItems_NoNewItems() {
+        List<MenuItem> inputItems = List.of(menuItem1, menuItem2);
+        List<MenuItem> existingItems = List.of(menuItem1, menuItem2);
 
-        assertThrows(EntityNotFoundException.class, () -> {
-            restaurantMenuService.addMenuItem(1L, List.of(new RestaurantMenuItemDTO()));
-        });
+        when(menuItemRepository.findByItemNameIn(anyList())).thenReturn(existingItems);
+        when(menuItemMapper.toDTO(anyList())).thenReturn(List.of(menuItemDTO1, menuItemDTO2));
 
-        verify(restaurantMenuItemRepository, never()).saveAll(anyList());
+        List<MenuItemDTO> result = menuItemService.addMenuItems(inputItems);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        verify(menuItemRepository, times(1)).findByItemNameIn(anyList());
+        verify(menuItemRepository, never()).saveAll(anyList());
+        verify(menuItemMapper, times(1)).toDTO(anyList());
+    }
+
+    @Test
+    void testGetMenuItems_Success() {
+        List<MenuItem> menuItems = List.of(menuItem1, menuItem2);
+        List<MenuItemDTO> menuItemDTOs = List.of(menuItemDTO1, menuItemDTO2);
+
+        when(menuItemRepository.findAll()).thenReturn(menuItems);
+        when(menuItemMapper.toDTO(menuItems)).thenReturn(menuItemDTOs);
+
+        List<MenuItemDTO> result = menuItemService.getMenuItems();
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        verify(menuItemRepository, times(1)).findAll();
+        verify(menuItemMapper, times(1)).toDTO(menuItems);
     }
 }

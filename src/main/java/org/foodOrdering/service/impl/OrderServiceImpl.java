@@ -5,6 +5,7 @@ import org.foodOrdering.dtos.OrderRequestDTO;
 import org.foodOrdering.dtos.OrderResponseDTO;
 import org.foodOrdering.dtos.RestaurantOrderItem;
 import org.foodOrdering.exception.EntityNotFoundException;
+import org.foodOrdering.exception.OrderNotFulfilledException;
 import org.foodOrdering.model.Order;
 import org.foodOrdering.model.OrderItem;
 import org.foodOrdering.model.RestaurantMenuItem;
@@ -16,10 +17,7 @@ import org.foodOrdering.repositories.RestaurantMenuItemRepository;
 import org.foodOrdering.repositories.RestaurantRepository;
 import org.foodOrdering.repositories.UserRepository;
 import org.foodOrdering.repositories.UserSettingsRepository;
-import org.foodOrdering.service.OrderService;
-import org.foodOrdering.service.RestaurantSelectionContext;
-import org.foodOrdering.service.RestaurantSelectionStrategy;
-import org.foodOrdering.service.RestaurantSelectionStrategyFactory;
+import org.foodOrdering.service.*;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -45,6 +43,8 @@ public class OrderServiceImpl implements OrderService {
 
     private final RestaurantSelectionStrategyFactory restaurantSelectionStrategyFactory;
 
+    private final RedisService redisService;
+
     @Override
     public OrderResponseDTO placeOrder(Long userId, List<OrderRequestDTO> orderRequestDTOList) {
         Optional<User> userOptional = userRepository.findById(userId);
@@ -55,12 +55,14 @@ public class OrderServiceImpl implements OrderService {
         List<RestaurantMenuItem> availableItems = restaurantMenuItemRepository.findAllByMenuItemIdIn(menuItemIds);
 
         if (availableItems.size() < orderRequestDTOList.size()) {
-            throw new RuntimeException("Order cannot be fulfilled");
+            throw new OrderNotFulfilledException("Order cannot be fulfilled");
         }
         Optional<UserSettings> userSettingsRepositoryOptional = userSettingsRepository.findByUserId(userId);
         RestaurantSelectionStrategy strategy = null;
         if (userSettingsRepositoryOptional.isPresent()) {
             strategy = restaurantSelectionStrategyFactory.getStrategy(userSettingsRepositoryOptional.get().getSelectionStrategy().name());
+        } else {
+            strategy = new LowerCostStrategyImpl(redisService);
         }
         //if absent use min price as default strategy
         RestaurantSelectionContext context = new RestaurantSelectionContext(strategy);
@@ -72,7 +74,7 @@ public class OrderServiceImpl implements OrderService {
                     .collect(Collectors.toList());
 
             if (restaurants.isEmpty()) {
-                throw new RuntimeException("No restaurant can fulfill item: " + request.getItemId());
+                throw new OrderNotFulfilledException("No restaurant can fulfill item: " + request.getItemId());
             }
 
             selectedItems.addAll(context.executeStrategy(restaurants, request.getQuantity()));

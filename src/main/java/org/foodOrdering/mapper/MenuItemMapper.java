@@ -1,18 +1,19 @@
 package org.foodOrdering.mapper;
 
+import org.foodOrdering.dtos.MenuItemDTO;
 import org.foodOrdering.dtos.RestaurantDTO;
+import org.foodOrdering.model.MenuItem;
 import org.foodOrdering.model.Restaurant;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
+import java.util.List;
+
 @Mapper(componentModel = "spring")
-public interface RestaurantMapper {
+public interface MenuItemMapper {
 
-    Restaurant toEntity(RestaurantDTO restaurantDTO);
-    RestaurantDTO toDTO(Restaurant restaurant);
-
+    MenuItem toEntity(MenuItemDTO menuItemDTO);
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    Restaurant updateFromDTO(@MappingTarget Restaurant restaurant, RestaurantDTO restaurantDTO);
+    List<MenuItemDTO> toDTO(List<MenuItem> menuItem);
 }

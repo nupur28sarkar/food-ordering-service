@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.foodOrdering.dtos.RestaurantOrderItem;
+import org.foodOrdering.exception.OrderNotFulfilledException;
 import org.foodOrdering.model.OrderItem;
 import org.foodOrdering.model.RestaurantMenuItem;
 import org.foodOrdering.service.RedisService;
@@ -45,13 +46,13 @@ public class LowerCostStrategyImpl implements RestaurantSelectionStrategy {
                 // Update Redis with the reserved capacity
                 boolean reserved = redisService.reserveCapacity(item.getRestaurant().getId(), quantityToOrder);
                 if (!reserved) {
-                    throw new RuntimeException("Unable to reserve capacity for restaurant: " + item.getRestaurant().getId());
+                    throw new OrderNotFulfilledException("Unable to reserve capacity for restaurant: " + item.getRestaurant().getId());
                 }
             }
         }
 
         if (remainingQuantity > 0) {
-            throw new RuntimeException("Insufficient capacity to fulfill the order.");
+            throw new OrderNotFulfilledException("Insufficient capacity to fulfill the order.");
         }
 
         return orderItems;

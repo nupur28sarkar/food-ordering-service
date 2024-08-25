@@ -19,4 +19,10 @@ public class GlobalExceptionHandler {
             EntityNotFoundException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
+
+    @ExceptionHandler(OrderNotFulfilledException.class)
+    public ResponseEntity<String> handleOrderNotFulfilledException(
+            OrderNotFulfilledException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNPROCESSABLE_ENTITY);
+    }
 }

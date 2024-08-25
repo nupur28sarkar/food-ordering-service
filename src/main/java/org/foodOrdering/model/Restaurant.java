@@ -2,6 +2,7 @@ package org.foodOrdering.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -12,6 +13,9 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "restaurant")
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class Restaurant {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

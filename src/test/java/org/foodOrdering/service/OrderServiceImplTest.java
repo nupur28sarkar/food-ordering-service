@@ -2,34 +2,30 @@ package org.foodOrdering.service;
 
 import org.foodOrdering.dtos.OrderRequestDTO;
 import org.foodOrdering.dtos.OrderResponseDTO;
+import org.foodOrdering.dtos.RestaurantOrderItem;
 import org.foodOrdering.exception.EntityNotFoundException;
-import org.foodOrdering.model.Order;
-import org.foodOrdering.model.OrderItem;
-import org.foodOrdering.model.RestaurantMenuItem;
-import org.foodOrdering.model.User;
-import org.foodOrdering.model.UserSettings;
-import org.foodOrdering.repositories.OrderItemRepository;
-import org.foodOrdering.repositories.OrderRepository;
-import org.foodOrdering.repositories.RestaurantMenuItemRepository;
-import org.foodOrdering.repositories.RestaurantRepository;
-import org.foodOrdering.repositories.UserRepository;
-import org.foodOrdering.repositories.UserSettingsRepository;
-import org.foodOrdering.service.RestaurantSelectionContext;
-import org.foodOrdering.service.RestaurantSelectionStrategy;
-import org.foodOrdering.service.RestaurantSelectionStrategyFactory;
+import org.foodOrdering.exception.OrderNotFulfilledException;
+import org.foodOrdering.model.*;
+import org.foodOrdering.repositories.*;
+import org.foodOrdering.service.*;
 import org.foodOrdering.service.impl.OrderServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
-class OrderServiceImplTest {
+@ExtendWith(MockitoExtension.class)
+public class OrderServiceImplTest {
 
     @Mock
     private RestaurantRepository restaurantRepository;
@@ -52,53 +48,91 @@ class OrderServiceImplTest {
     @Mock
     private RestaurantSelectionStrategyFactory restaurantSelectionStrategyFactory;
 
+    @Mock
+    private RedisService redisService;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
-    public OrderServiceImplTest() {
-        MockitoAnnotations.openMocks(this);
+    private User user;
+    private Order order;
+    private RestaurantMenuItem menuItem1;
+    private RestaurantMenuItem menuItem2;
+    private OrderRequestDTO orderRequestDTO1;
+    private OrderRequestDTO orderRequestDTO2;
+
+    @BeforeEach
+    void setUp() {
+        user = new User();
+        user.setId(1L);
+        user.setName("John Doe");
+        user.setEmail("john.doe@example.com");
+
+        menuItem1 = new RestaurantMenuItem();
+        menuItem1.setId(1L);
+        menuItem1.setMenuItem(MenuItem.builder().id(1L).build());
+        menuItem1.setPrice(5.0);
+        menuItem1.setRestaurant(Restaurant.builder().id(1L).build());
+
+        menuItem2 = new RestaurantMenuItem();
+        menuItem2.setId(2L);
+        menuItem2.setMenuItem(MenuItem.builder().id(2L).build());
+        menuItem2.setPrice(10.0);
+        menuItem2.setRestaurant(Restaurant.builder().id(2L).build());
+
+        orderRequestDTO1 = new OrderRequestDTO(1L, 2.0);
+        orderRequestDTO2 = new OrderRequestDTO(2L, 3.0);
+
+        order = Order.builder().id(1L).user(user).build();
     }
 
     @Test
-    void placeOrder_Success() {
-        User user = new User();
-        OrderRequestDTO requestDTO = new OrderRequestDTO();
-        requestDTO.setItemId(1L);
-        RestaurantMenuItem menuItem = new RestaurantMenuItem();
-        menuItem.getMenuItem().setId(1L);
-        Order order = Order.builder().build();
-
-        when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
-        when(restaurantMenuItemRepository.findAllByMenuItemIdIn(anyList())).thenReturn(List.of(menuItem));
+    void testPlaceOrder_Success() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(restaurantMenuItemRepository.findAllByMenuItemIdIn(anyList())).thenReturn(List.of(menuItem1, menuItem2));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
-        when(restaurantSelectionStrategyFactory.getStrategy(anyString())).thenReturn(mock(RestaurantSelectionStrategy.class));
+        when(userSettingsRepository.findByUserId(1L)).thenReturn(Optional.empty());
+        when(redisService.getCapacity(anyLong())).thenReturn(10.0);
+        when(orderItemRepository.saveAll(anyList())).thenReturn(null);
+        when(redisService.reserveCapacity(anyLong(), any())).thenReturn(true);
 
-        OrderResponseDTO result = orderService.placeOrder(1L, List.of(requestDTO));
+        RestaurantSelectionStrategy mockStrategy = (menuItems, quantity) -> List.of(
+                new RestaurantOrderItem(menuItem1, 2.0),
+                new RestaurantOrderItem(menuItem2, 3.0)
+        );
+//        when(restaurantSelectionStrategyFactory.getStrategy(anyString())).thenReturn(mockStrategy);
 
-        assertNotNull(result);
+        OrderResponseDTO response = orderService.placeOrder(1L, List.of(orderRequestDTO1, orderRequestDTO2));
+
+        assertNotNull(response);
+        assertEquals(1L, response.getOrderId());
+        verify(orderRepository, times(1)).save(any(Order.class));
         verify(orderItemRepository, times(1)).saveAll(anyList());
     }
 
     @Test
-    void placeOrder_UserNotFound() {
-        when(userRepository.findById(anyLong())).thenReturn(Optional.empty());
+    void testPlaceOrder_UserNotFound() {
+        when(userRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThrows(EntityNotFoundException.class, () -> {
-            orderService.placeOrder(1L, List.of(new OrderRequestDTO()));
-        });
+        EntityNotFoundException exception = assertThrows(EntityNotFoundException.class,
+                () -> orderService.placeOrder(1L, List.of(orderRequestDTO1, orderRequestDTO2)));
+
+        assertEquals("User with userid1is not present", exception.getMessage());
+        verify(userRepository, times(1)).findById(1L);
+        verifyNoMoreInteractions(orderRepository);
     }
 
     @Test
-    void placeOrder_InsufficientItems() {
-        User user = new User();
-        OrderRequestDTO requestDTO = new OrderRequestDTO();
-        requestDTO.setItemId(1L);
+    void testPlaceOrder_ItemsNotAvailable() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(restaurantMenuItemRepository.findAllByMenuItemIdIn(anyList())).thenReturn(List.of(menuItem1));
 
-        when(userRepository.findById(anyLong())).thenReturn(Optional.of(user));
-        when(restaurantMenuItemRepository.findAllByMenuItemIdIn(anyList())).thenReturn(List.of());
+        OrderNotFulfilledException exception = assertThrows(OrderNotFulfilledException.class,
+                () -> orderService.placeOrder(1L, List.of(orderRequestDTO1, orderRequestDTO2)));
 
-        assertThrows(RuntimeException.class, () -> {
-            orderService.placeOrder(1L, List.of(requestDTO));
-        });
+        assertEquals("Order cannot be fulfilled", exception.getMessage());
+        verify(restaurantMenuItemRepository, times(1)).findAllByMenuItemIdIn(anyList());
+        verifyNoMoreInteractions(orderRepository);
     }
+
 }

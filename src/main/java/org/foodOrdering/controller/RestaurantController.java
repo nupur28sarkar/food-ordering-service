@@ -10,6 +10,7 @@ import org.foodOrdering.service.RestaurantMenuItemService;
 import org.foodOrdering.service.RestaurantService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,7 +26,7 @@ public class RestaurantController {
     private final RestaurantMenuItemService restaurantMenuItemService;
 
     @PostMapping
-    public ResponseEntity<RestaurantDTO> registerRestaurant(@Valid @RequestBody RestaurantDTO restaurantDTO) {
+    public ResponseEntity<RestaurantDTO> registerRestaurant(@RequestBody RestaurantDTO restaurantDTO) {
         RestaurantDTO createdRestaurant = restaurantService.registerRestaurant(restaurantDTO);
         return new ResponseEntity<>(createdRestaurant, HttpStatus.CREATED);
     }
@@ -37,8 +38,8 @@ public class RestaurantController {
     }
 
     @PostMapping("/{restaurantId}/menu")
-    public ResponseEntity<List<RestaurantMenuItem> > addMenuItems(@PathVariable Long restaurantId, @RequestBody List<RestaurantMenuItemDTO> restaurantMenu) {
-        List<RestaurantMenuItem> createdMenuItems = restaurantMenuItemService.addMenuItem(restaurantId, restaurantMenu);
+    public ResponseEntity<List<RestaurantMenuItemDTO> > addMenuItems(@PathVariable Long restaurantId, @RequestBody List<RestaurantMenuItemDTO> restaurantMenu) {
+        List<RestaurantMenuItemDTO> createdMenuItems = restaurantMenuItemService.addMenuItem(restaurantId, restaurantMenu);
         return new ResponseEntity<>(createdMenuItems, HttpStatus.CREATED);
     }
 

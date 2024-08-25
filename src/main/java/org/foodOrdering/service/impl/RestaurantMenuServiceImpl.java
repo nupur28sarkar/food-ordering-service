@@ -11,9 +11,7 @@ import org.foodOrdering.repositories.RestaurantRepository;
 import org.foodOrdering.service.RestaurantMenuItemService;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,7 +24,7 @@ public class RestaurantMenuServiceImpl implements RestaurantMenuItemService {
 
     private final RestaurantMenuItemMapper restaurantMenuItemMapper;
     @Override
-    public List<RestaurantMenuItem> addMenuItem(Long restaurantId, List<RestaurantMenuItemDTO> restaurantMenu) {
+    public List<RestaurantMenuItemDTO> addMenuItem(Long restaurantId, List<RestaurantMenuItemDTO> restaurantMenu) {
         Optional<Restaurant> restaurantOptional = restaurantRepository.findById(restaurantId);
         if (restaurantOptional.isEmpty()) {
             throw new EntityNotFoundException("Restaurant with id " + restaurantId + " not found");
@@ -40,11 +38,47 @@ public class RestaurantMenuServiceImpl implements RestaurantMenuItemService {
                 .map((RestaurantMenuItemDTO restaurantMenuItemDTO) -> restaurantMenuItemMapper.toEntity(restaurantMenuItemDTO, restaurantId)) // Convert DTOs to entities with additional parameter
                 .toList();
 
-        return restaurantMenuItemRepository.saveAll(restaurantMenuItemsToSave);
+        List<RestaurantMenuItem> savedRestaurantMenuItem =  restaurantMenuItemRepository.saveAll(restaurantMenuItemsToSave);
+        return restaurantMenuItemMapper.toDTOList(savedRestaurantMenuItem);
     }
 
     @Override
     public List<RestaurantMenuItemDTO> updateMenuItem(Long restaurantId, List<RestaurantMenuItemDTO> updatedMenu) {
-        return null;
+        Optional<Restaurant> restaurantOptional = restaurantRepository.findById(restaurantId);
+        if (restaurantOptional.isEmpty()) {
+            throw new EntityNotFoundException("Restaurant with id " + restaurantId + " not found");
+        }
+
+        // Fetch existing menu items for the restaurant
+        List<RestaurantMenuItem> existingMenuItems = restaurantMenuItemRepository.findAllByRestaurantId(restaurantId);
+
+        // Map existing items by menuItemId for quick lookup
+        Map<Long, RestaurantMenuItem> existingMenuItemMap = existingMenuItems.stream()
+                .collect(Collectors.toMap(RestaurantMenuItem::getId, item -> item));
+
+        // Prepare list to save
+        List<RestaurantMenuItem> menuItemsToSave = new ArrayList<>();
+
+        // Iterate through updated menu items
+        for (RestaurantMenuItemDTO dto : updatedMenu) {
+            RestaurantMenuItem existingItem = existingMenuItemMap.get(dto.getId());
+
+            if (existingItem != null) {
+                // Update existing item
+                existingItem.setPrice(dto.getPrice());
+                menuItemsToSave.add(existingItem);
+            } else {
+                // Create a new item if it does not exist
+                RestaurantMenuItem newItem = restaurantMenuItemMapper.toEntity(dto, restaurantId);
+                menuItemsToSave.add(newItem);
+            }
+        }
+
+        // Save updated items
+        List<RestaurantMenuItem> savedItems = restaurantMenuItemRepository.saveAll(menuItemsToSave);
+
+        // Convert saved entities to DTOs and return
+        return restaurantMenuItemMapper.toDTOList(savedItems);
     }
+
 }
